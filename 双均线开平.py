@@ -29,7 +29,8 @@ try:
         if 判断是否符合开仓(klines):
             当前多仓=api.get_position("SHFE.rb2001")
             当前委托=api.get_order()
-            if 当前多仓['pos_long_his']==0 and 当前委托=={}:
+            当前该品种未成交的=sum([当前委托[x]['volume_left'] for x in 当前委托 if 当前委托[x]['instrument_id']=="SHFE.rb2001"])
+            if 当前多仓['pos_long_his']==0 and 当前多仓['pos_long_tody']==0 and  当前该品种未成交的==0:
                 order = api.insert_order(symbol="SHFE.rb2001", direction="BUY", offset="OPEN",volume=1000)
                 print('.......我开仓了.....')
                 q=api.get_quote("SHFE.rb2001")
@@ -38,6 +39,9 @@ try:
             当前多仓=api.get_position("SHFE.rb2001")
             if 当前多仓['pos_long_his']!=0:
                 order = api.insert_order(symbol="SHFE.rb2001", direction="SELL", offset="CLOSE",volume=1000)
+                print('.......我平仓了.....')
+            if 当前多仓['pos_long_his']!=0:
+                order = api.insert_order(symbol="SHFE.rb2001", direction="SELL", offset="CLOSETODAY",volume=1000)
                 print('.......我平仓了.....')
                 q=api.get_quote("SHFE.rb2001")
                 print(q["datetime"])
