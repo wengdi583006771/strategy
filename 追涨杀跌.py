@@ -1,5 +1,4 @@
 from tqsdk import TqApi, TqSim,TqBacktest, BacktestFinished
-from tqsdk.ta import MA
 import time
 from datetime import date
 
@@ -9,11 +8,11 @@ acc = TqSim()
 一次下多少单子=1
 当前状态='寻找开仓机会'
 检测最近多少tick序列=10
-波动开仓跳数=15
-委托远离几条撤单=10
+波动开仓跳数=6
+委托远离几跳撤单=10
 委托间隔多少秒撤单=120
 保本损改变条件=20
-止损=10
+止损=2
 止盈=30
 单跟1分钟超过多少平仓=20
 止损临时=0
@@ -28,12 +27,12 @@ def 开仓判断(行情,tick序列):
         if mymax-mymin>波动开仓跳数*一跳价格:
             当前状态='检测委托'
             止损临时=止损
-            委托时间=tick序列['last_pricel'].tolist()[-1]
-            if tick序列['last_price'][::-1].idxmax()>tick序列['last_price'][::-1].idxmain():
-                委托单子=api.insert_order(symbol=品种,direction="BUY", offset="OPEN", volume=一次下多少单子, limit_price=tick序列['bid_pricel'].tolist()[-1])
+            委托时间=tick序列['datetime'].tolist()[-1]
+            if tick序列['last_price'][::-1].idxmax()>tick序列['last_price'][::-1].idxmin():
+                委托单子 = api.insert_order(symbol=品种, direction="BUY", offset="OPEN", volume=一次下多少单子,limit_price=tick序列["bid_price1"].tolist()[-1])
             else:
-                委托单子=api.insert_order(symbol=品种,direction='SELL', offset="OPEN",volume=一次下多少单子, limit_price=tick序列['ask_pricel'].tolist()[-1])
-    
+                委托单子 = api.insert_order(symbol=品种, direction="SELL", offset="OPEN", volume=一次下多少单子,limit_price=tick序列["ask_price1"].tolist()[-1])
+
 
  
 def 检测委托 (行情,tick序列):
@@ -43,18 +42,21 @@ def 检测委托 (行情,tick序列):
         委托价格1=a['limit_price']
         未成交手数1=a['volume_left']
         开单方向1=a['direction']
-        当前价格=tick序列['last_pricel'].tolist()[-1]
-        下单时间=a['insert_date_time']
+        if 开单方向1=="BUY":
+            当前价格=tick序列["bid_price1"].tolist()[-1]
+        else:
+            当前价格=tick序列["ask_price1"].tolist()[-1]
+        # 下单时间=a['insert_date_time']
         if  未成交手数1 ==0:
             当前状态='等待平仓'
             print('已经开仓成功')
             return 
-        if abs(委托价格1-当前价格)>委托远离几条撤单*一跳价格:
+        if abs(委托价格1-当前价格)>委托远离几跳撤单*一跳价格:
             api.cancel_order(委托单子['order_id'])
             当前状态='寻找开仓机会'
             print('远离挂单，撤单了')
             return
-        if  (tick序列['datatime'].tolist()[-1]-委托时间)/1000000000>委托间隔多少秒撤单:
+        if  (tick序列['datetime'].tolist()[-1]-委托时间)/1000000000>委托间隔多少秒撤单:
             api.cancel_order(委托单子['order_id'])
             当前状态='寻找开仓机会'
             print('挂单太久，撤单了')
@@ -67,13 +69,13 @@ def 持仓检测模块(行情,tick序列):
     多仓成本=data['open_price_long']
     空仓之和=data['pos_short_his']+data['pos_short_today']
     空仓成本=data['open_price_short']
-    当前价格=tick序列['last_pricel'].tolist()[-1]
+    当前价格=tick序列["last_price"].tolist()[-1]
     if 多仓之和>0:
-        if 当前价格>多仓成本+保本损改变条件*一跳价格:
-            止损临时=0
+        if 当前价格>多仓成本+保本损改变条件:
+            止损临时=保本损改变条件
     else:
-        if 空仓成本>当前价格+保本损改变条件*一跳价格:
-            止损临时=0
+        if 空仓成本>当前价格+保本损改变条件:
+            止损临时=保本损改变条件
 
 
 def 固定止损止盈(行情,tick序列):
@@ -83,22 +85,22 @@ def 固定止损止盈(行情,tick序列):
     多仓成本=data['open_price_long']
     空仓之和=data['pos_short_his']+data['pos_short_today']
     空仓成本=data['open_price_short']
-    当前价格=tick序列['last_pricel'].tolist()[-1]
+    当前价格=tick序列["last_price"].tolist()[-1]
     if 多仓之和>0:
-        if 当前价格>=多仓成本+止盈*一跳价格:
+        if 当前价格>=多仓成本+止盈:
             平所有(品种)
             print('止盈')
             当前状态='寻找开仓机会'
-        if 当前价格<=多仓成本-止损临时*一跳价格:
+        if 当前价格<=多仓成本-止损临时:
             平所有(品种)
             print('止损')
             当前状态='寻找开仓机会'
     else :
-        if 当前价格<=空仓成本-止盈*一跳价格:
+        if 当前价格<=空仓成本-止盈:
             平所有(品种)
             print('止盈')
             当前状态='寻找开仓机会'
-        if 当前价格>=空仓成本+止损临时*一跳价格:
+        if 当前价格>=空仓成本+止损临时:
             平所有(品种)
             print('止损')
             当前状态='寻找开仓机会'
@@ -144,12 +146,13 @@ def 平仓检测(行情,tick序列):
         固定止损止盈(行情,tick序列)
         一分钟检测(行情,tick序列)
 try:
-    api=TqApi(acc, backtest=TqBacktest(start_dt=date(2019, 11, 1), end_dt=date(2019, 11, 8)))
-    行情= api.get_kline_serial(品种, 60,100)
+    api=TqApi(acc, backtest=TqBacktest(start_dt=date(2019, 11, 7), end_dt=date(2019, 11, 8)))
+    行情=api.get_kline_serial(品种,60,100)
     tick序列=api.get_tick_serial(品种,检测最近多少tick序列 )
     
     while True:
         api.wait_update()
+        print(当前状态)
         开仓判断(行情,tick序列)
         检测委托(行情,tick序列)
         平仓检测(行情,tick序列)
